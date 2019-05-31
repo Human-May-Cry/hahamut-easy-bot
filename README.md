@@ -1,0 +1,1 @@
+# hahamut-easy-bot
