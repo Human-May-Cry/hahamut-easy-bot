@@ -26,8 +26,12 @@ function replyMessage(senderID, reciveMessage)
 
   if(reciveMessage == CName)
   {
-    var messageText = "直接輸入角色名稱和裝備名稱可以查資料";
+    var messageText = "直接輸入角色名稱和裝備名稱可以查資料，或輸入：車圖";
     sendTextMessage(senderID, messageText);
+  }
+  else if(reciveMessage.indexOf("車圖")>-1||reciveMessage.indexOf("上車")>-1) //只要使用者輸入的文字裡含有“車圖”或是“上車”，都會被視為是要發圖給他
+  {
+    randImage(senderID);
   }
   else
   {
@@ -108,4 +112,20 @@ function findCharacter(recipientId, keyword)
     }
    }
   
+}
+
+
+function randImage(recipientId) 
+{
+  var SpreadSheet = SpreadsheetApp.openById(sheetID);
+  var name = "image";
+  var Sheet = SpreadSheet.getSheetByName(name);
+  var lastRow = Sheet.getLastRow();
+  var range = Sheet.getRange(2, 1, lastRow);
+  var keys = range.getValues();
+  var key = keys[Math.floor(Math.random()*keys.length)]; //從data裡隨機取一個
+  
+  key = key[0].toString(); //轉成字串 
+  sendTextMessage(recipientId,key);
+
 }
