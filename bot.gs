@@ -1,6 +1,8 @@
 var ACCESS_TOKEN = '貼上你的哈哈姆特ACCESS_TOKEN'; //引號內貼上你的ACCESS_TOKEN
 var sheetID = "貼上你的google表單id";  //引號內貼上你的google表單id
 var CName = '貼上你的哈哈姆特指令代號'; //引號內貼上你的指令代號
+var imageId ='貼上你的圖片Id';
+var imageExt ='貼上你的圖片Ext';
 
 function doPost(e) {
 
@@ -8,9 +10,24 @@ function doPost(e) {
   console.log(data);
   var webhook_event = data.messaging[0];
   var senderID = data.messaging[0].sender_id; //把使用者id抓出來
+  var eventID = data.messaging[0].message.event_id; //把server給的特殊介面event抓出來
+  var botCommand = data.messaging[0].message.bot_command; //把使用者按下的按鈕對應指令抓出來
   var reciveMessage = data.messaging[0].message.text; //把使用者丟給bot的文字抓出來
   
-  replyMessage(senderID, reciveMessage); //呼叫判斷
+  Users(senderID); //記錄使用者
+  
+  if(reciveMessage)
+  {
+   replyMessage(senderID, reciveMessage); //呼叫判斷
+  }
+  else if(eventID)
+  {
+    doExCommand(senderID, eventID, botCommand); //表示有收到互動介面的事件，要對互動介面做更動
+  }
+  else
+  {
+    console.log("request fail");
+  }
   
   return ContentService.createTextOutput("200 OK");
 }
@@ -26,8 +43,9 @@ function replyMessage(senderID, reciveMessage)
 
   if(reciveMessage == CName)
   {
-    var messageText = "直接輸入角色名稱和裝備名稱可以查資料，或輸入：車圖";
+    var messageText = "點擊圖片進行互動";
     sendTextMessage(senderID, messageText);
+    quickMenu(senderID); //互動介面
   }
   else if(reciveMessage.indexOf("車圖")>-1||reciveMessage.indexOf("上車")>-1) //只要使用者輸入的文字裡含有“車圖”或是“上車”，都會被視為是要發圖給他
   {
@@ -230,3 +248,235 @@ function getIDs()
 
   return ids;
 }
+
+function quickMenu(senderID) 
+{
+  var initMessage ='這裡打字這裡打字這裡打字'; //顯示的文字
+  var button =[]; //指令button
+  
+  var hpObj = setHpObj(0, 0,"#FF0000", true);  //設定hp物件
+  var textObj = setTextObj(initMessage, "#019BAD", false);   //設定文字物件
+  
+  button = addButton(button, false, "所有角色表", "CharacterList");   //新增按鈕
+  button = addButton(button, false, "關於這個bot", "About"); //新增按鈕
+  var buttonObj = setButtonObj(1, button, false);   //設定按鈕物件
+  
+  var initObj = setInitObj(imageId, imageExt, hpObj, textObj, buttonObj);  //初始特殊介面
+  var messageObj = botStartMessageObj(imageId, imageExt, initObj); //初始啟動介面
+  var jsonData = exMessage(senderID, messageObj); //打包
+  sendExMessage(jsonData);
+ 
+}
+
+function doExCommand(senderID, eventID, botCommand)
+{
+  switch(botCommand) {
+     case "CharacterList":
+        SendCharacterLists(senderID);
+        break;
+     case "About":
+      sendTextMessage(senderID, "直接輸入角色名稱和裝備名稱可以查資料，或輸入：車圖");
+        break;
+     default:
+      sendTextMessage(senderID, "收到回應");
+  }
+  
+  var initMessage ='這裡打字這裡打字這裡打字'; //顯示的文字
+  var button =[]; //指令button
+  
+  var hpObj = setHpObj(0, 0,"#FF0000", true);  
+  var textObj = setTextObj(initMessage, "#019BAD", false);   
+  
+  button = addButton(button, false, "所有角色表", "CharacterList");   
+  button = addButton(button, false, "關於這個bot", "About");
+  var buttonObj = setButtonObj(1, button, false);   
+  
+  var messageObj = botEventMessageObj(eventID, imageId, imageExt, hpObj, textObj, buttonObj) //特殊介面
+  var jsonData = exMessage(senderID, messageObj);
+  sendExMessage(jsonData);
+}
+
+//列出所有可以查詢的角色給使用者
+function SendCharacterLists(senderID)
+{
+  var list = getCharacterLists();
+  var outPutTable='';
+  
+  for(var i = 0; i<list.length;i++)
+    {
+      outPutTable += list[i]+'\n';
+    }
+//  Logger.log(outPutTable);
+  sendTextMessage(senderID, "可以查詢的角色(輸入暱稱也可以)：\n"+outPutTable);
+}
+
+// 查表，把所有角色名單拉出來
+function getCharacterLists()
+{
+  var SpreadSheet = SpreadsheetApp.openById(sheetID);
+  var name = "character";
+  var Sheet = SpreadSheet.getSheetByName(name);
+  var lastRow = Sheet.getLastRow();
+ 
+  var range = Sheet.getRange(2, 2, lastRow-1);
+  var values = range.getValues();
+  return values;
+}
+
+//以下為特殊介面-------------------------------------------------------------------------------------------------->
+
+function sendExMessage(jsonData)
+{
+  
+   var url = "https://us-central1-hahamut-8888.cloudfunctions.net/messagePush?access_token="+ACCESS_TOKEN;
+   
+    var response = UrlFetchApp.fetch(url, {
+      'headers': {
+        'Content-Type': 'application/json; charset=UTF-8',
+      },
+      'method': 'post',
+      'payload': jsonData
+    });
+  
+    Logger.log(response);
+}
+
+
+function exMessage(senderID, messageObj)
+{
+  var jsonData = {};
+  var recipient = {}; //回覆對象的物件
+  
+  recipient["id"] = senderID;
+  jsonData["recipient"] = recipient;
+  jsonData["message"] = messageObj; 
+  jsonData = JSON.stringify(jsonData);
+  
+  return jsonData;
+}
+
+function textMessageObj(messageText)
+{
+  var message = {}; //回覆訊息物件
+  message["type"] = "text";
+  message["text"] = messageText;
+  
+  return message;
+}
+
+function stickerMessageObj(stickerGroup, stickerID)
+{
+  var message = {}; //回覆訊息物件
+  message["type"] = "sticker";
+  message["sticker_group"] = stickerGroup;
+  message["sticker_id"] = stickerID;
+  
+  return message;
+  
+}
+
+function imageMessageObj(imageID, imageExt, imageWidth, imageHeight)
+{
+  var message = {}; //回覆訊息物件
+  message["type"] = "img";
+  message["id"] = imageID;
+  message["ext"] = imageExt;
+  message["width"] = imageWidth;
+  message["height"] = imageHeight;
+  
+  return message;
+}
+
+function botStartMessageObj(sImageID, sImageExt, initObj)
+{
+  var message = {}; //回覆訊息物件
+  message["type"] = "botStart";
+  message["start_img"] = sImageID + '.' + sImageExt; //start_img 要是一個字串
+  message["init"] = initObj; 
+  
+  return message;
+}
+
+function setInitObj(imageID, imageExt, hpObj, textObj, buttonObj)
+{
+  var initObj = {}; //物件，一開始看到的特殊介面
+  if(imageID == '')
+  {
+   initObj["image"] = ''; //image 要是一個字串
+  }
+  else
+  {
+   initObj["image"] = imageID + '.' + imageExt; //image 要是一個字串 
+  }
+  initObj["hp"] = hpObj;
+  initObj["text"] = textObj;
+  initObj["button"] = buttonObj;
+  
+  return initObj;
+}
+
+function botEventMessageObj(eventID, imageID, imageExt, hpObj, textObj, buttonObj)
+{
+  var message = {}; //回覆訊息物件
+  message["type"] = "botEvent";
+  message["event_id"] = eventID; //event_id 要是一個字串
+  if(imageID == '')
+  {
+   message["image"] = ''; //image 要是一個字串
+  }
+  else
+  {
+   message["image"] = imageID + '.' + imageExt; //image 要是一個字串
+  }
+//  message["image"] = imageID + '.' + imageExt; //image 要是一個字串
+  message["hp"] = hpObj;
+  message["text"] = textObj;
+  message["button"] = buttonObj;
+   
+  return message;
+}
+
+function setHpObj(maxHp, currentHp, hpColor, hidden)
+{
+  var hpObj = {}; //hp物件
+  hpObj["max"] = maxHp; //max 是一個數字值
+  hpObj["current"] = currentHp; //current 是一個數字值
+  hpObj["color"] = hpColor;  //color 是一個字串
+  hpObj["hidden"] = hidden; //hidden 是一個布林值
+
+  return hpObj;
+}
+
+function setTextObj(message, backgroundColor, hidden)
+{
+  var textObj = {}; //文字物件
+  textObj["message"] = message;
+  textObj["color"] = backgroundColor; //color 是一個字串
+  textObj["hidden"] = hidden; //hidden 是一個布林值
+  
+  return textObj;
+}
+
+function setButtonObj(buttonStyle, buttonSetting, hidden)
+{
+  var buttonObj = {}; //文字物件
+  buttonObj["style"] = buttonStyle; // style 是一個數字值
+  buttonObj["setting"] = buttonSetting; // setting 是一個array
+  buttonObj["hidden"] = hidden; //hidden 是一個布林值
+   
+  return buttonObj;
+}
+
+function addButton(buttonArray, isDisabled, buttonText, buttonCommand)
+{
+  var bSettings = {}; //每個按鈕的設定物件
+  bSettings["disabled"] = isDisabled; // disabled 是一個布林值
+  bSettings["order"] = buttonArray.length; // order 是一個數字值， buttonArray 是一個array
+  bSettings["text"] = buttonText;  // text 是一個字串
+  bSettings["command"] = buttonCommand;  // command 是一個字串
+  
+  buttonArray.push(bSettings);
+   
+  return buttonArray;
+}
+//以上為特殊介面-------------------------------------------------------------------------------------------------->
